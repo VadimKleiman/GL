@@ -1,3 +1,4 @@
+#define STB_IMAGE_IMPLEMENTATION
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
@@ -7,6 +8,7 @@
 
 #include "shader.h"
 #include "camera.h"
+#include "model.h"
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -78,9 +80,49 @@ glm::vec3 cubePositions[] = {
         glm::vec3( 8.0f,  2.0f, 5.0f)
 };
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
-void do_movement();
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
+{
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, GL_TRUE);
+    if (key >= 0 && key < 1024)
+    {
+        if (action == GLFW_PRESS)
+            keys[key] = true;
+        else if (action == GLFW_RELEASE)
+            keys[key] = false;
+    }
+}
+
+void move()
+{
+    if (keys[GLFW_KEY_W])
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (keys[GLFW_KEY_S])
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (keys[GLFW_KEY_A])
+        camera.ProcessKeyboard(LEFT, deltaTime);
+    if (keys[GLFW_KEY_D])
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+}
+
+bool firstMouse = true;
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        lastX = static_cast<GLfloat>(xpos);
+        lastY = static_cast<GLfloat>(ypos);
+        firstMouse = false;
+    }
+
+    auto xoffset = static_cast<GLfloat>(xpos - lastX);
+    auto yoffset = static_cast<GLfloat>(lastY - ypos);
+
+    lastX = static_cast<GLfloat>(xpos);
+    lastY = static_cast<GLfloat>(ypos);
+
+    camera.ProcessMouseMovement(xoffset, yoffset);
+}
 
 void initialization()
 {
@@ -158,7 +200,7 @@ std::pair<GLuint, GLuint> initBox()
     return std::make_pair(box_vao, box_vbo);
 }
 
-void renderObjects(const Shader& shader, std::pair<GLuint, GLuint>& box, std::pair<GLuint, GLuint>& surface, bool flag)
+void renderObjects(const Shader& shader, Model& box, std::pair<GLuint, GLuint>& surface, bool flag)
 {
     if (flag) {
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float) WIDTH / (float) HEIGHT, 0.1f,
@@ -173,7 +215,7 @@ void renderObjects(const Shader& shader, std::pair<GLuint, GLuint>& box, std::pa
     glBindVertexArray(surface.first);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
-    glBindVertexArray(box.first);
+//    glBindVertexArray(box.first);
     for (unsigned int i = 0; i < BOXCOUNT; i++)
     {
         if (flag) {
@@ -187,15 +229,18 @@ void renderObjects(const Shader& shader, std::pair<GLuint, GLuint>& box, std::pa
         {
             cubePositions[i].x = sin((float)glfwGetTime() + 10.0f) * 2.0f;
             model = glm::translate(model, cubePositions[i]);
+            model = glm::scale(model, glm::vec3(0.002f));
         } else
         {
             model = glm::translate(model, cubePositions[i]);
+            model = glm::scale(model, glm::vec3(0.002f));
         }
         shader.setMat4("model", model);
+        box.Draw(shader);
 
-        glDrawArrays(GL_TRIANGLES, 0, 36);
+//        glDrawArrays(GL_TRIANGLES, 0, 36);
     }
-    glBindVertexArray(0);
+//    glBindVertexArray(0);
 }
 
 void renderLamp(Shader& shader)
@@ -226,7 +271,6 @@ int main()
     Shader lampShader("../lamp_v.glsl", "../lamp_f.glsl");
     auto surface = initSurface();
     auto box = initBox();
-
     GLuint lightVAO;
     glGenVertexArrays(1, &lightVAO);
     glBindVertexArray(lightVAO);
@@ -234,8 +278,6 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), nullptr);
     glEnableVertexAttribArray(0);
     glBindVertexArray(0);
-
-
     const unsigned int SHADOW_WIDTH = 4096, SHADOW_HEIGHT = 4096;
     unsigned int depthMapFBO;
     glGenFramebuffers(1, &depthMapFBO);
@@ -252,24 +294,21 @@ int main()
     glDrawBuffer(GL_NONE);
     glReadBuffer(GL_NONE);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
     lightingShader.use();
     lightingShader.setInt("shadowMap", 1);
-
     glm::vec3 lightPos(-2.0f, 4.0f, -1.0f);
-
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    Model bunny("../bunny.obj");
     while(!glfwWindowShouldClose(window))
     {
         auto currentFrame = static_cast<GLfloat>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
-
         glfwPollEvents();
-        do_movement();
-
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        move();
+        glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         glm::mat4 lightProjection, lightView;
         glm::mat4 lightSpaceMatrix;
         float near_plane = 1.0f, far_plane = 10.5f;
@@ -278,20 +317,13 @@ int main()
         lightSpaceMatrix = lightProjection * lightView;
         depthShader.use();
         depthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
-
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
         glClear(GL_DEPTH_BUFFER_BIT);
-        renderObjects(depthShader, box, surface, false);
+        renderObjects(depthShader, bunny, surface, false);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         lightingShader.use();
@@ -302,11 +334,8 @@ int main()
         lightingShader.setVec3("viewPos", camera.Position);
         lightingShader.setVec3("lightPos", lightPos);
         lightingShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
-
-
         lightingShader.setVec3("light.position", lampPos);
         lightingShader.setVec3("viewPos", camera.Position);
-
         glm::vec3 lightColor;
         lightColor.x = sin(2.0f);
         lightColor.y = sin(0.7f);
@@ -316,70 +345,20 @@ int main()
         lightingShader.setVec3("light.ambient", ambientColor);
         lightingShader.setVec3("light.diffuse", diffuseColor);
         lightingShader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
-
         lightingShader.setVec3("material.ambient", 1.0f, 0.5f, 0.31f);
         lightingShader.setVec3("material.diffuse", 1.0f, 0.5f, 0.31f);
         lightingShader.setVec3("material.specular", 0.5f, 0.5f, 0.5f);
         lightingShader.setFloat("material.shininess", 32.0f);
-
-
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthMap);
-
-        renderObjects(lightingShader, box, surface, true);
-
-
+//        renderObjects(lightingShader, box, surface, true);
+        renderObjects(lightingShader, bunny, surface, true);
         renderLamp(lampShader);
         glBindVertexArray(lightVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
-
         glfwSwapBuffers(window);
     }
     glfwTerminate();
     return 0;
-}
-
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
-    if (key >= 0 && key < 1024)
-    {
-        if (action == GLFW_PRESS)
-            keys[key] = true;
-        else if (action == GLFW_RELEASE)
-            keys[key] = false;
-    }
-}
-
-void do_movement()
-{
-    if (keys[GLFW_KEY_W])
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (keys[GLFW_KEY_S])
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (keys[GLFW_KEY_A])
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (keys[GLFW_KEY_D])
-        camera.ProcessKeyboard(RIGHT, deltaTime);
-}
-
-bool firstMouse = true;
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    if (firstMouse)
-    {
-        lastX = static_cast<GLfloat>(xpos);
-        lastY = static_cast<GLfloat>(ypos);
-        firstMouse = false;
-    }
-
-    auto xoffset = static_cast<GLfloat>(xpos - lastX);
-    auto yoffset = static_cast<GLfloat>(lastY - ypos);
-
-    lastX = static_cast<GLfloat>(xpos);
-    lastY = static_cast<GLfloat>(ypos);
-
-    camera.ProcessMouseMovement(xoffset, yoffset);
 }
