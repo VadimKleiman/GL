@@ -9,11 +9,105 @@
 #include "include/shader.h"
 #include "include/model.h"
 #include "include/light.h"
+#include <AntTweakBar.h>
+
+TwBar *bar;
+bool isPress = false;
+bool isPressBar = false;
+bool updateStart = false;
+float oldZoom = 2.33;
+float X = 0.7f, Y = 0.0f;
+float X_old = 0.0f, Y_old = 0.0f;
+float zoom_X = 0.0f;
+float zoom_Y = 0.0f;
+float zoom = 2.33;
+int iter = 100;
+
+const unsigned int SCR_WIDTH = 1280;
+const unsigned int SCR_HEIGHT = 720;
+
+inline void TwEventMouseButtonGLFW3(GLFWwindow* window, int button, int action, int mods)
+{
+    TwEventMouseButtonGLFW(button, action);
+    updateStart = isPress = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
+    isPressBar = false;
+}
+inline void TwEventMousePosGLFW3(GLFWwindow* window, double xpos, double ypos)
+{
+#ifdef __APPLE__
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    TwMouseMotion(int(xpos * width / WIDTH), int(ypos * height / HEIGHT));
+#else
+    TwMouseMotion(int(xpos), int(ypos));
+#endif
+    int pos[2];
+    int size[2];
+    TwGetParam(bar, nullptr, "position", TW_PARAM_INT32, 2, pos);
+    TwGetParam(bar, nullptr, "size", TW_PARAM_INT32, 2, size);
+#ifdef __APPLE__
+    pos[0] /= width / WIDTH;
+    pos[1] /= height / HEIGHT;
+    size[0] /= width / WIDTH;
+    size[1] /= height / HEIGHT;
+#endif
+    if ((xpos > pos[0] && xpos < size[0] + pos[0] && ypos > pos[1] && ypos < size[1] + pos[1]) && !isPressBar)
+    {
+        isPressBar = true;
+    }
+    zoom_X = xpos;
+    zoom_Y = ypos;
+    if (!(xpos > pos[0] && xpos < size[0] + pos[0] && ypos > pos[1] && ypos < size[1] + pos[1]) && !isPressBar)
+    {
+        if (updateStart)
+        {
+            X_old = xpos;
+            Y_old = ypos;
+            updateStart = false;
+        }
+        if (isPress)
+        {
+            const double dx = (xpos - X_old) / (double)SCR_WIDTH * zoom * SCR_WIDTH / SCR_HEIGHT;
+            const double dy = (ypos - Y_old) / (double)SCR_HEIGHT * zoom;
+            X += dx;
+            Y += dy;
+            X_old = xpos;
+            Y_old = ypos;
+        }
+    }
+}
+inline void TwEventMouseWheelGLFW3(GLFWwindow* window, double xoffset, double yoffset)
+{
+    TwEventMouseWheelGLFW(yoffset);
+    oldZoom = zoom;
+    zoom += yoffset * 0.001 * zoom;
+    zoom = std::max(0.001f, zoom);
+    const double oldX = -(zoom_X / (double)SCR_WIDTH - 0.5) * oldZoom;
+    const double oldY = (zoom_Y / (double)SCR_HEIGHT - 0.5) * oldZoom;
+
+    const double newX = -(zoom_X / (double)SCR_WIDTH - 0.5) * zoom;
+    const double newY = (zoom_Y / (double)SCR_HEIGHT - 0.5) * zoom;
+    X -= (newX - oldX) * SCR_WIDTH / SCR_HEIGHT;
+    Y += newY - oldY;
+}
+inline void TwEventKeyGLFW3(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    TwEventKeyGLFW(key, action);
+}
+inline void TwEventCharGLFW3(GLFWwindow* window, int codepoint)
+{
+    TwEventCharGLFW(codepoint, GLFW_PRESS);
+}
+inline void TwWindowSizeGLFW3(GLFWwindow* window, int width, int height)
+{
+    TwWindowSize(width, height);
+}
+
 
 std::vector<glm::vec3> lightPositions;
 std::vector<glm::vec3> lightColors;
-Light lights(5);
-
+Light lights(1);
+float g = 2.2f;
 int mode = 0;
 
 void processInput(GLFWwindow *window) {
@@ -31,10 +125,15 @@ void processInput(GLFWwindow *window) {
         mode = 2;
     if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
         mode = 3;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        g += 0.1;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        g -= 0.1;
+        if (g <= 0.1)
+            g = 0.1;
+    }
 }
 
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 const glm::vec3 landscapePos = glm::vec3(-3.0, -10.0, -3.0);
@@ -68,7 +167,7 @@ GLFWwindow *createWindow() {
         return nullptr;
     }
     glfwMakeContextCurrent(window);
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) {
         std::cout << "Failed to initialize GLEW" << std::endl;
@@ -142,14 +241,28 @@ glm::mat4 view = glm::lookAt(positionCamera, positionCamera +
 int main() {
     initialization();
     GLFWwindow *window = createWindow();
+    TwInit(TW_OPENGL_CORE, nullptr);
+    bar = TwNewBar("TweakBar");
+    TwWindowSize(1280, 720);
+    TwAddVarRW(bar, "Gamma", TW_TYPE_FLOAT, &g,
+               " label='Gamma' min=0.1 max=10.0 step=0.1");
+
+    glfwSetWindowSizeCallback(window, (GLFWwindowposfun)TwWindowSizeGLFW3);
+
+    glfwSetMouseButtonCallback(window, (GLFWmousebuttonfun)TwEventMouseButtonGLFW3);
+    glfwSetCursorPosCallback(window, (GLFWcursorposfun)TwEventMousePosGLFW3);
+    glfwSetScrollCallback(window, (GLFWscrollfun)TwEventMouseWheelGLFW3);
+    glfwSetKeyCallback(window, (GLFWkeyfun)TwEventKeyGLFW3);
+    glfwSetCharCallback(window, (GLFWcharfun)TwEventCharGLFW3);
     initRenderScene();
-    Shader shaderGeometryPass("../shaders/g_buffer_vs.glsl", "../shaders/g_buffer_fs.glsl");
-    Shader shaderLightingPass("../shaders/deferred_shading_vs.glsl", "../shaders/deferred_shading_fs.glsl");
-    Shader shaderLightBox("../shaders/light_sphere_vs.glsl", "../shaders/light_sphere_fs.glsl");
-    Model sphere("../sphere/sphere.obj");
-    Model landscape("../landscape/landscape.obj");
+
+    Shader shaderGeometryPass("shaders/g_buffer_vs.glsl", "shaders/g_buffer_fs.glsl");
+    Shader shaderLightingPass("shaders/deferred_shading_vs.glsl", "shaders/deferred_shading_fs.glsl");
+    Shader shaderLightBox("shaders/light_sphere_vs.glsl", "shaders/light_sphere_fs.glsl");
+    Model sphere("sphere/sphere.obj");
+    Model landscape("landscape/landscape.obj");
     initGBuffer();
-    const unsigned int NR_LIGHTS = 5;
+    const unsigned int NR_LIGHTS = 1;
     srand(13);
     for (unsigned int i = 0; i < NR_LIGHTS; i++) {
         float xPos = ((rand() % 100) / 100.0) * 6.0 - 3.0;
@@ -166,7 +279,8 @@ int main() {
     shaderLightingPass.setInt("gNormal", 1);
     shaderLightingPass.setInt("gAlbedoSpec", 2);
     shaderLightingPass.setInt("mode", mode);
-    shaderLightingPass.setInt("count_l", 5);
+    shaderLightingPass.setInt("count_l", 1);
+    shaderLightingPass.setFloat("gamma", g);
     while (!glfwWindowShouldClose(window)) {
         float currentFrame = (float) glfwGetTime();
         deltaTime = currentFrame - lastFrame;
@@ -196,6 +310,7 @@ int main() {
         glActiveTexture(GL_TEXTURE2);
         glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
         shaderLightingPass.setInt("count_l", lights.getCount());
+        shaderLightingPass.setFloat("gamma", g);
         for (unsigned int i = 0; i < lightPositions.size(); i++) {
             lightPositions[i].x += cos((float) glfwGetTime()) * 0.02f;
             lightPositions[i].z += sin((float) glfwGetTime()) * 0.02f;
@@ -212,6 +327,7 @@ int main() {
         if (mode == 0) {
             lights.draw(lightPositions, lightColors, sphere, shaderLightBox, projection, view);
         }
+        TwDraw();
         glfwSwapBuffers(window);
         glfwPollEvents();
     }

@@ -18,6 +18,7 @@ uniform Light lights[NR_LIGHTS];
 uniform vec3 viewPos;
 uniform vec3 dir;
 uniform int count_l;
+uniform float gamma;
 void main()
 {
     if (mode == 0) {
@@ -43,7 +44,7 @@ void main()
                 lighting += (diffuse + specular) * (lights[i].Radius - distance) / lights[i].Radius * 3;
             }
         }
-        FragColor = vec4(lighting, 1.0);
+        FragColor = vec4(pow(lighting, vec3(1.0 / gamma)), 1.0);
     }
     else if (mode == 1)
     {
