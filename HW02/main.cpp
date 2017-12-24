@@ -6,9 +6,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "shader.h"
+#include "include/shader.h"
 #include "camera.h"
-#include "model.h"
+#include "include/model.h"
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -266,9 +266,9 @@ int main()
     if (!window) {
         return -1;
     }
-    Shader depthShader("../depth_map_v.glsl", "../depth_map_f.glsl");
-    Shader lightingShader("../light_shadows_v.glsl", "../light_shadows_f.glsl");
-    Shader lampShader("../lamp_v.glsl", "../lamp_f.glsl");
+    Shader depthShader("../shaders/depth_map_v.glsl", "../shaders/depth_map_f.glsl");
+    Shader lightingShader("../shaders/light_shadows_v.glsl", "../shaders/light_shadows_f.glsl");
+    Shader lampShader("../shaders/lamp_v.glsl", "../shaders/lamp_f.glsl");
     auto surface = initSurface();
     auto box = initBox();
     GLuint lightVAO;
@@ -299,7 +299,7 @@ int main()
     glm::vec3 lightPos(-2.0f, 4.0f, -1.0f);
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
-    Model bunny("../bunny.obj");
+    Model bunny("../bunny/bunny.obj");
     while(!glfwWindowShouldClose(window))
     {
         auto currentFrame = static_cast<GLfloat>(glfwGetTime());
@@ -320,7 +320,10 @@ int main()
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
         glClear(GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1.0f, 1.0f);
         renderObjects(depthShader, bunny, surface, false);
+        glDisable(GL_POLYGON_OFFSET_FILL);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -351,8 +354,10 @@ int main()
         lightingShader.setFloat("material.shininess", 32.0f);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthMap);
-//        renderObjects(lightingShader, box, surface, true);
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1.0f, 1.0f);
         renderObjects(lightingShader, bunny, surface, true);
+        glDisable(GL_POLYGON_OFFSET_FILL);
         renderLamp(lampShader);
         glBindVertexArray(lightVAO);
         glDrawArrays(GL_TRIANGLES, 0, 36);
