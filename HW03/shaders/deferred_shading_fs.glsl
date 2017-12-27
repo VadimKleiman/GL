@@ -24,7 +24,7 @@ void main()
     if (mode == 0) {
         vec3 FragPos = texture(gPosition, TexCoords).rgb;
         vec3 Normal = texture(gNormal, TexCoords).rgb;
-        vec3 Diffuse = texture(gAlbedoSpec, TexCoords).rgb;
+        vec3 Diffuse = pow(texture(gAlbedoSpec, TexCoords).rgb, vec3(gamma));
         float Specular = texture(gAlbedoSpec, TexCoords).a;
         vec3 lighting  = Diffuse * 0.1;
         vec3 viewDir  = normalize(viewPos - FragPos);
