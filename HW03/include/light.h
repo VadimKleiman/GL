@@ -2,6 +2,8 @@
 #include "shader.h"
 #include <vector>
 
+
+extern float getRnd();
 class Light
 {
 private:
@@ -41,9 +43,9 @@ public:
                 float yPos = -7.0;
                 float zPos = ((rand() % 100) / 100.0) * 12.0 - 6.0;
                 lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
-                float rColor = ((rand() % 100) / 200.0f) + 0.5;
-                float gColor = ((rand() % 100) / 200.0f) + 0.5;
-                float bColor = ((rand() % 100) / 200.0f) + 0.5;
+                float rColor = getRnd();
+                float gColor = getRnd();
+                float bColor = (rColor - 1.0 <= 0.0 && gColor - 1.0 <= 0.0) ? 1.0 : 0.0;
                 lightColors.push_back(glm::vec3(rColor, gColor, bColor));
             }
             _count++;
