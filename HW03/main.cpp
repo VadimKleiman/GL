@@ -13,6 +13,7 @@
 #include <AntTweakBar.h>
 
 bool typeMouse = false;
+int df = 100;
 TwBar *bar;
 bool isPress = false;
 bool isPressBar = false;
@@ -140,6 +141,7 @@ inline void TwWindowSizeGLFW3(GLFWwindow* window, int width, int height)
 
 std::vector<glm::vec3> lightPositions;
 std::vector<glm::vec3> lightColors;
+std::vector<int> lightDif;
 Light lights(1);
 float g = 2.2f;
 int mode = 0;
@@ -151,7 +153,7 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
         lights.remove();
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        lights.add(lightPositions, lightColors);
+        lights.add(lightPositions, lightColors, lightDif);
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
         mode = 0;
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
@@ -312,6 +314,7 @@ int main() {
 //        float gColor = ((rand() % 100) / 200.0f) + 0.5;
 //        float bColor = ((rand() % 100) / 200.0f) + 0.5;
         lightColors.push_back(glm::vec3(rColor, gColor, bColor));
+        lightDif.push_back(df);
     }
     shaderLightingPass.use();
     shaderLightingPass.setInt("gPosition", 0);
@@ -357,11 +360,16 @@ int main() {
         glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
         shaderLightingPass.setInt("count_l", lights.getCount());
         shaderLightingPass.setFloat("gamma", g);
+        df = rand() % 200;
+        if (df == 0) {
+            df = 100;
+        }
+        shaderLightingPass.setInt("dif_coef", df);
         for (unsigned int i = 0; i < lightPositions.size(); i++) {
             lightPositions[i].x += cos((float) glfwGetTime()) * 0.02f;
             lightPositions[i].z += sin((float) glfwGetTime()) * 0.02f;
         }
-        lights.refresh(lightPositions, lightColors, shaderLightingPass);
+        lights.refresh(lightPositions, lightColors, lightDif, shaderLightingPass);
         shaderLightingPass.setVec3("viewPos", camera.Position);
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

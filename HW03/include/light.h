@@ -15,7 +15,7 @@ public:
     {
 
     }
-    void refresh(std::vector<glm::vec3>& lightPositions, std::vector<glm::vec3>& lightColors, Shader& shader)
+    void refresh(std::vector<glm::vec3>& lightPositions, std::vector<glm::vec3>& lightColors, std::vector<int>& lightDif, Shader& shader)
     {
         for (unsigned int i = 0; i < lightPositions.size(); i++) {
             shader.setVec3("lights[" + std::to_string(i) + "].Position", lightPositions[i]);
@@ -30,11 +30,13 @@ public:
                             std::sqrt(linear * linear - 4 * quadratic * (constant - (256.0f / 5.0f) * maxBrightness))) /
                            (2.0f * quadratic);
             shader.setFloat("lights[" + std::to_string(i) + "].Radius", radius);
+            shader.setInt("lights[" + std::to_string(i) + "].dif_coef", lightDif[i]);
         }
     }
 
-    void add(std::vector<glm::vec3>& lightPositions, std::vector<glm::vec3>& lightColors)
+    void add(std::vector<glm::vec3>& lightPositions, std::vector<glm::vec3>& lightColors, std::vector<int>& lightDif)
     {
+        int df;
         if (_count < lightPositions.size()) {
             _count++;
         } else {
@@ -45,8 +47,13 @@ public:
                 lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
                 float rColor = getRnd();
                 float gColor = getRnd();
-                float bColor = (rColor - 1.0 <= 0.0 && gColor - 1.0 <= 0.0) ? 1.0 : 0.0;
+                float bColor = (rColor - 1.0 <= 0.0 && gColor - 1.0 <= 0.0) ? 1.0 : getRnd();
                 lightColors.push_back(glm::vec3(rColor, gColor, bColor));
+                df = rand() % 200;
+                if (df == 0) {
+                    df = 100;
+                }
+                lightDif.push_back(df);
             }
             _count++;
         }
