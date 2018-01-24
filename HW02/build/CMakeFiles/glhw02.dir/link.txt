@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++   -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/glhw02.dir/main.cpp.o  -o glhw02 /usr/local/lib/libglfw.3.2.dylib -framework OpenGL /usr/local/lib/libGLEW.dylib -lassimp 
