@@ -9,8 +9,11 @@
 #include "include/shader.h"
 #include "include/model.h"
 #include "include/light.h"
+#include "include/camera.h"
 #include <AntTweakBar.h>
 
+bool typeMouse = false;
+int df = 100;
 TwBar *bar;
 bool isPress = false;
 bool isPressBar = false;
@@ -26,12 +29,43 @@ int iter = 100;
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
+Camera camera(glm::vec3(0.0f, 0.0f, 5.0f));
+float lastX = (float)SCR_WIDTH / 2.0;
+float lastY = (float)SCR_HEIGHT / 2.0;
+bool firstMouse = true;
+
+
+float getRnd()
+{
+    return (float) (rand() % 100 > 50 ? 1.0 : 0.0);
+}
+
 inline void TwEventMouseButtonGLFW3(GLFWwindow* window, int button, int action, int mods)
 {
     TwEventMouseButtonGLFW(button, action);
     updateStart = isPress = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
     isPressBar = false;
 }
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
+    lastX = xpos;
+    lastY = ypos;
+    if (!typeMouse)
+        camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+
 inline void TwEventMousePosGLFW3(GLFWwindow* window, double xpos, double ypos)
 {
 #ifdef __APPLE__
@@ -75,6 +109,7 @@ inline void TwEventMousePosGLFW3(GLFWwindow* window, double xpos, double ypos)
             Y_old = ypos;
         }
     }
+    mouse_callback(window, xpos, ypos);
 }
 inline void TwEventMouseWheelGLFW3(GLFWwindow* window, double xoffset, double yoffset)
 {
@@ -106,9 +141,11 @@ inline void TwWindowSizeGLFW3(GLFWwindow* window, int width, int height)
 
 std::vector<glm::vec3> lightPositions;
 std::vector<glm::vec3> lightColors;
+std::vector<int> lightDif;
 Light lights(1);
 float g = 2.2f;
 int mode = 0;
+float deltaTime = 0.0f;
 
 void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -116,7 +153,7 @@ void processInput(GLFWwindow *window) {
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
         lights.remove();
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        lights.add(lightPositions, lightColors);
+        lights.add(lightPositions, lightColors, lightDif);
     if (glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
         mode = 0;
     if (glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
@@ -125,16 +162,25 @@ void processInput(GLFWwindow *window) {
         mode = 2;
     if (glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
         mode = 3;
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.ProcessKeyboard(FORWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.ProcessKeyboard(BACKWARD, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        g += 0.1;
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-        g -= 0.1;
-        if (g <= 0.1)
-            g = 0.1;
+        camera.ProcessKeyboard(RIGHT, deltaTime);
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS) {
+        typeMouse = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS) {
+        typeMouse = false;
     }
 }
 
-float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 const glm::vec3 landscapePos = glm::vec3(-3.0, -10.0, -3.0);
 const float quadVertices[] = {
@@ -167,7 +213,7 @@ GLFWwindow *createWindow() {
         return nullptr;
     }
     glfwMakeContextCurrent(window);
-//    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK) {
         std::cout << "Failed to initialize GLEW" << std::endl;
@@ -231,13 +277,6 @@ void initGBuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float) SCR_WIDTH / (float) SCR_HEIGHT, 0.1f,
-                                        100.0f);
-glm::mat4 view = glm::lookAt(positionCamera, positionCamera +
-                                             glm::vec3(cos(glm::radians(-90.0f)) * cos(glm::radians(-25.0f)),
-                                                       sin(glm::radians(-25.0f)),
-                                                       sin(glm::radians(-90.0f)) * cos(glm::radians(-25.0f))),
-                             glm::vec3(0.0f, 1.0f, 0.0f));
 int main() {
     initialization();
     GLFWwindow *window = createWindow();
@@ -263,16 +302,19 @@ int main() {
     Model landscape("landscape/landscape.obj");
     initGBuffer();
     const unsigned int NR_LIGHTS = 1;
-    srand(13);
+    srand(time(nullptr));
     for (unsigned int i = 0; i < NR_LIGHTS; i++) {
         float xPos = ((rand() % 100) / 100.0) * 6.0 - 3.0;
         float yPos = -6.0;
         float zPos = ((rand() % 100) / 100.0) * 6.0 - 3.0;
         lightPositions.push_back(glm::vec3(xPos, yPos, zPos));
-        float rColor = ((rand() % 100) / 200.0f) + 0.5;
-        float gColor = ((rand() % 100) / 200.0f) + 0.5;
-        float bColor = ((rand() % 100) / 200.0f) + 0.5;
+        float rColor = getRnd();
+        float gColor = getRnd();
+        float bColor = (rColor - 1.0 <= 0.0 && gColor - 1.0 <= 0.0) ? 1.0 : 0.0;
+//        float gColor = ((rand() % 100) / 200.0f) + 0.5;
+//        float bColor = ((rand() % 100) / 200.0f) + 0.5;
         lightColors.push_back(glm::vec3(rColor, gColor, bColor));
+        lightDif.push_back(df);
     }
     shaderLightingPass.use();
     shaderLightingPass.setInt("gPosition", 0);
@@ -282,6 +324,11 @@ int main() {
     shaderLightingPass.setInt("count_l", 1);
     shaderLightingPass.setFloat("gamma", g);
     while (!glfwWindowShouldClose(window)) {
+        if (typeMouse) {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        } else {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
         float currentFrame = (float) glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
@@ -291,6 +338,8 @@ int main() {
         glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glm::mat4 model;
+        glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        glm::mat4 view = camera.GetViewMatrix();
         shaderGeometryPass.use();
         shaderGeometryPass.setMat4("projection", projection);
         shaderGeometryPass.setMat4("view", view);
@@ -311,12 +360,17 @@ int main() {
         glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
         shaderLightingPass.setInt("count_l", lights.getCount());
         shaderLightingPass.setFloat("gamma", g);
+        df = rand() % 200;
+        if (df == 0) {
+            df = 100;
+        }
+        shaderLightingPass.setInt("dif_coef", df);
         for (unsigned int i = 0; i < lightPositions.size(); i++) {
             lightPositions[i].x += cos((float) glfwGetTime()) * 0.02f;
             lightPositions[i].z += sin((float) glfwGetTime()) * 0.02f;
         }
-        lights.refresh(lightPositions, lightColors, shaderLightingPass);
-        shaderLightingPass.setVec3("viewPos", positionCamera);
+        lights.refresh(lightPositions, lightColors, lightDif, shaderLightingPass);
+        shaderLightingPass.setVec3("viewPos", camera.Position);
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         glBindVertexArray(0);

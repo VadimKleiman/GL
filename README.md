@@ -18,3 +18,5 @@
 * 4 - Albedo
 * e - Add one light
 * q - Remove one light
+* f - Normal cursor
+* g - Disable cursor

@@ -7,7 +7,7 @@ uniform sampler2D gAlbedoSpec;
 struct Light {
     vec3 Position;
     vec3 Color;
-
+    int dif_coef;
     float Linear;
     float Quadratic;
     float Radius;
@@ -39,12 +39,13 @@ void main()
                 float spec = pow(max(dot(Normal, halfwayDir), 0.0), 16.0);
                 vec3 specular = lights[i].Color * spec * Specular;
                 float attenuation = 1.0 / (1.0 + lights[i].Linear * distance + lights[i].Quadratic * distance * distance);
-                diffuse *= attenuation;
+                diffuse *= attenuation * lights[i].dif_coef;
                 specular *= attenuation;
-                lighting += (diffuse + specular) * (lights[i].Radius - distance) / lights[i].Radius * 3;
+                lighting += (diffuse + specular) * (lights[i].Radius - distance) / lights[i].Radius;
+
             }
         }
-        FragColor = vec4(pow(lighting, vec3(1.0 / gamma)), 1.0);
+        FragColor = vec4(pow(lighting, vec3(1 / gamma)), 1.0);
     }
     else if (mode == 1)
     {
